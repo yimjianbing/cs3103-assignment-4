@@ -9,7 +9,7 @@ def receive_data():
         data, addr = s.recvfrom(1024)
         
         # parse the headers using gameNetAPI
-        data = gameNetAPI.parse_headers(data.decode())
+        data = gameNetAPI.parse_headers(data)
         print(f"Received message: {data} from {addr}")
         if data == b'exit':
             break
