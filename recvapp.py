@@ -1,18 +1,17 @@
 import socket
+from typing import Union
 import gameNetAPI
 
-sender_ip = 'localhost'
-sender_port = 12345
 recv_ip = 'localhost'
 recv_port = 54321
 
+
+recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+recv_sock.bind(("localhost", 54321))
+recv_sock.setblocking(False)
+
 def receive_data():
     while True:
-        data, addr = gameNetAPI.recv_sock.recvfrom(1024)
-
-        # parse the headers using gameNetAPI
-        data = gameNetAPI.parse_headers(data)
-        print(f"Received message: {data} from {addr}")
-        if data == b'exit':
-            break
-    s.close()
+        data: Union[bytes, None] = gameNetAPI.recv(1024, sock=recv_sock)
+        if data is not None:
+            print(f"Received data: {data}")
