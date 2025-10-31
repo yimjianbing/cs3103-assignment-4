@@ -1,13 +1,15 @@
 import socket
 import gameNetAPI
 
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.bind(('localhost', 12345))
+sender_ip = 'localhost'
+sender_port = 12345
+recv_ip = 'localhost'
+recv_port = 54321
 
 def receive_data():
     while True:
-        data, addr = s.recvfrom(1024)
-        
+        data, addr = gameNetAPI.recv_sock.recvfrom(1024)
+
         # parse the headers using gameNetAPI
         data = gameNetAPI.parse_headers(data)
         print(f"Received message: {data} from {addr}")

@@ -1,20 +1,14 @@
 import struct
+import socket
 
 HEADER_FORMAT = '!BBHI'
+MAX_SEQUENCE_NUMBER = 10  # Example maximum sequence number
 
-def add_headers(message: str) -> bytes:
-    
-    # Example values
-    ack = 1
-    channel_type = 2
-    seq_no = 12345
-    timestamp = 1698234567
+send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+send_sock.bind(("localhost", 12345))
 
-    # Pack the header
-    header_bytes = struct.pack(HEADER_FORMAT, ack, channel_type, seq_no, timestamp)
-    
-    return header_bytes + message.encode()
-
+recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+recv_sock.bind(("localhost", 54321))
 
 def parse_headers(data: bytes) -> str:
     unpacked = struct.unpack(HEADER_FORMAT, data[:8])
@@ -22,15 +16,17 @@ def parse_headers(data: bytes) -> str:
     return f"ACK: {ack}, Channel Type: {channel_type}, Seq No: {seq_no}, Timestamp: {timestamp}"
 
 
-def checksum(msg: bytes) -> int:
-    s = 0
-    if len(msg) % 2 == 1:
-        msg += b'\x00'
-    for i in range(0, len(msg), 2):
-        w = (msg[i] << 8) + msg[i + 1]
-        s += w
-    s = (s >> 16) + (s & 0xffff)
-    s = s + (s >> 16)
-    return ~s & 0xffff
+def send(reliable: bool, timestamp: int, ip: str, port: int, message: bytes) -> None:
+    
+    sequence_number = 1 % MAX_SEQUENCE_NUMBER
+    channel_type = 0 if reliable else 1
+    timestamp = timestamp
+    
+    header_bytes = struct.pack(HEADER_FORMAT, channel_type, sequence_number, timestamp)
+    message_with_headers = header_bytes + message
+    
+    
+    send_sock.sendto(message_with_headers, (ip, port))
+    
     
     
