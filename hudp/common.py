@@ -1,5 +1,25 @@
 """
 Common constants, enums, and utilities for H-UDP transport.
+
+H-UDP Packet Format (8-byte header + variable payload):
+
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|    Channel    |     Flags     |        Sequence Number        |
+|   (0x00/01)   | (ACK/RETX)    |          (0-65535)            |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Timestamp (milliseconds)                  |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Payload (variable)                    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Header Fields:
+- Byte 0:   Channel (0x00=UNRELIABLE, 0x01=RELIABLE)
+- Byte 1:   Flags (bit0=ACK, bit2=RETX)
+- Bytes 2-3: Sequence number (uint16, big-endian)
+- Bytes 4-7: Timestamp in milliseconds (uint32, big-endian)
+- Bytes 8+:  Application payload
 """
 import struct
 from enum import IntEnum, IntFlag
@@ -10,7 +30,7 @@ from typing import Optional
 # Protocol Constants
 # ============================================================================
 
-HEADER_FORMAT = '!BBHI'
+HEADER_FORMAT = '!BBHI'  # network byte order: uint8, uint8, uint16, uint32
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 8 bytes
 
 # Default configuration values

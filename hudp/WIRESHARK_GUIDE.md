@@ -375,6 +375,32 @@ Plot packets over time to visualize:
 - ACKs are small (8 bytes total = UDP header + H-UDP header only)
 - Check both directions (client→server AND server→client)
 
+### Issue: Wireshark shows "GPRS Network Service" or wrong protocol
+
+**This is VERY common!** Wireshark is misidentifying your H-UDP packets.
+
+**Solution (choose one):**
+
+**Option 1: Disable GPRS dissector**
+1. Analyze → Enabled Protocols
+2. Search for "GPRS" or "BSSGP"
+3. Uncheck it
+4. Click OK
+
+**Option 2: Decode As Data**
+1. Right-click packet → Decode As...
+2. Field: UDP port, Value: your port (e.g., 9000)
+3. Change from "GPRS Network Service" to "Data"
+4. Click OK
+
+**Option 3: Just ignore it!**
+- Your packets are fine - just look at the "Data" section
+- The H-UDP header is still there in the raw bytes
+- Wireshark's guess is wrong, but the data is correct
+
+**Why this happens:**
+Your H-UDP header bytes coincidentally match GPRS protocol patterns. This is normal for custom protocols and doesn't affect your data!
+
 ---
 
 ## 📝 Example Wireshark Session

@@ -19,14 +19,60 @@ A production-style hybrid UDP transport layer implementing both **reliable** (Se
 ### Packet Header Format
 
 ```
-Offset  Field      Type     Description
-------  -----      ----     -----------
-0       channel    uint8    0=UNRELIABLE, 1=RELIABLE
-1       flags      uint8    bit0=ACK, bit1=NACK, bit2=RETX
-2-3     seq        uint16   Sequence number (0-65535)
-4-7     ts_ms      uint32   Timestamp in milliseconds
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|    Channel    |     Flags     |        Sequence Number        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Timestamp (milliseconds)                  |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Payload (variable)                    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
 
-Total: 8 bytes (network byte order, big-endian)
+**Header Fields (8 bytes total, network byte order):**
+
+| Byte(s) | Field    | Type   | Description                                    |
+|---------|----------|--------|------------------------------------------------|
+| 0       | Channel  | uint8  | `0x00` = UNRELIABLE, `0x01` = RELIABLE         |
+| 1       | Flags    | uint8  | Bit 0=ACK, Bit 2=RETX (others reserved)        |
+| 2-3     | Sequence | uint16 | Sequence number (0-65535, big-endian)          |
+| 4-7     | Timestamp| uint32 | Timestamp in milliseconds (big-endian)         |
+| 8+      | Payload  | bytes  | Application data (max ~1192 bytes by default)  |
+
+**Example Packets:**
+
+```
+RELIABLE Data Packet (21 bytes total):
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0x01 (REL)     |0x00 (NONE)    |0x00 0x05 (seq=5)              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0x12 0x34 0x56 0x78 (ts=305419896 ms)                          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|'H' 'e' 'l' 'l' 'o' ' ' 'W' 'o' 'r' 'l' 'd' '!' '\0'          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+ACK Packet (8 bytes total, no payload):
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0x01 (REL)     |0x01 (ACK)     |0x00 0x05 (acking seq=5)       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0x87 0x65 0x43 0x21 (ts=2271560481 ms)                        |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+UNRELIABLE Data Packet:
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0x00 (UNREL)   |0x00 (NONE)    |0x00 0x0A (seq=10)             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|0x11 0x22 0x33 0x44 (ts=287454020 ms)                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|'p' 'o' 's' ':' ' ' 'x' '=' '1' '0' '0' ...                   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
 ### State Machines

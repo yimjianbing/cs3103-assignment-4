@@ -418,7 +418,7 @@ class ClientProtocol(HUDPProtocol):
         except asyncio.CancelledError:
             pass
             
-    def datagram_received(self, data: bytes, addr: tuple):
+    def datagram_received(self, data: bytes, addr: Tuple[str, int]):
         """Handle received datagram."""
         packet = decode_packet(data)
         if not packet:
@@ -660,7 +660,7 @@ class ServerProtocol(HUDPProtocol):
                 
                 now_ms = get_time_ms()
                 
-                for addr, client_state in list(self.clients.items()):
+                for addr, client_state in list[tuple[tuple[Any, ...], ClientState]](self.clients.items()):
                     # Check for gaps in reliable delivery
                     if client_state.expected_seq in client_state.gap_first_seen:
                         gap_start_ms = client_state.gap_first_seen[client_state.expected_seq]
@@ -696,11 +696,11 @@ class ServerProtocol(HUDPProtocol):
         except asyncio.CancelledError:
             pass
             
-    def datagram_received(self, data: bytes, addr: tuple):
+    def datagram_received(self, data: bytes, addr: Tuple[str, int]):
         """Handle received datagram."""
         packet = decode_packet(data)
         if not packet:
-            return
+            return  
             
         now_ms = get_time_ms()
         
@@ -725,7 +725,7 @@ class ServerProtocol(HUDPProtocol):
             self.stats["rx_unreliable"] += 1
             self._handle_unreliable_data(packet, addr, now_ms)
             
-    def _handle_reliable_data(self, packet: Packet, addr: tuple, client_state, now_ms: int):
+    def _handle_reliable_data(self, packet: Packet, addr: Tuple[str, int], client_state , now_ms: int):
         """Handle reliable data packet."""
         seq = packet.header.seq
         
