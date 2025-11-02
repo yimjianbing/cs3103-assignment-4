@@ -52,6 +52,7 @@ class ReceiverApp:
         
         self.start_time = time.time()
         self.last_stats_time = self.start_time
+        self.running = True
         
     def on_receive(self, packet: dict):
         """Callback for received packets."""
@@ -92,24 +93,27 @@ class ReceiverApp:
         
         try:
             # Run forever
-            while True:
+            while self.running:
                 await asyncio.sleep(1)
                 
         except KeyboardInterrupt:
             print("\nInterrupted by user")
             
         finally:
-            # Close server
-            await self.server.close()
+            # Signal shutdown to stats task FIRST
+            self.running = False
             
-            # Stop stats task
+            # Cancel stats task immediately and wait for it
             stats_task.cancel()
             try:
                 await stats_task
             except asyncio.CancelledError:
                 pass
+            
+            # Now close server (after stats task is stopped)
+            await self.server.close()
                 
-            # Print final stats
+            # Print final stats (after everything is stopped)
             print("\n" + "=" * 80)
             print("FINAL STATISTICS")
             print("=" * 80)
@@ -118,17 +122,23 @@ class ReceiverApp:
     async def print_stats_periodically(self):
         """Print statistics every second."""
         try:
-            while True:
+            while self.running:
                 await asyncio.sleep(1.0)
                 
+                # Double-check we're still running before printing
+                if not self.running:
+                    break
+                
                 now = time.time()
-                elapsed = now - self.last_stats_time
                 self.last_stats_time = now
                 
-                print(f"\n[{now - self.start_time:.1f}s] Stats:")
-                self._print_stats()
+                # Final check right before printing (in case of shutdown during sleep)
+                if self.running:
+                    print(f"\n[{now - self.start_time:.1f}s] Stats:")
+                    self._print_stats()
                 
         except asyncio.CancelledError:
+            # Task was cancelled, exit cleanly
             pass
             
     def _print_stats(self):

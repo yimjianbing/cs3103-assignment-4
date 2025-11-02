@@ -20,12 +20,15 @@ sleep 2
 echo "Stopping receiver..."
 kill $RECV_PID 2>/dev/null
 
+# Wait for receiver to fully terminate
+wait $RECV_PID 2>/dev/null
+
 echo ""
 echo "==================="
 echo "Demo complete!"
 echo ""
-echo "Receiver log (last 30 lines):"
-tail -30 receiver.log
+echo "Receiver log (last 30 packet deliveries):"
+grep "DELIVER\|EVENT" receiver.log | tail -30
 
 rm -f receiver.log
 
