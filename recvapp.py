@@ -101,6 +101,8 @@ class ReceiverApp:
             
         finally:
             # Signal shutdown to stats task FIRST
+            
+            print("\n" + "=" * 200)
             self.running = False
             
             # Cancel stats task immediately and wait for it
@@ -115,7 +117,7 @@ class ReceiverApp:
                 
             # Print final stats (after everything is stopped)
             print("\n" + "=" * 80)
-            print("FINAL STATISTICS")
+            print("FINAL STATISTICS FOR RECEIVER")
             print("=" * 80)
             self._print_stats()
             

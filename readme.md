@@ -111,10 +111,6 @@ UNRELIABLE Data Packet:
 
 **Requirements**: Python 3.11+ (stdlib only, no external dependencies)
 
-```bash
-cd hudp/
-```
-
 No additional installation needed!
 
 ## Usage
