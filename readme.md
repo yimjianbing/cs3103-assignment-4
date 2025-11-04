@@ -429,7 +429,7 @@ This implementation is provided for educational and research purposes.
 
 Designed and implemented as a reference implementation of hybrid UDP transport for real-time multiplayer games.
 
-**Author**: Senior Network Engineer (AI-assisted implementation)  
+**Author**: Yim Jian Bing, Zhang Yuan, Wei Yan Oo, Wu Bojin
 **Course**: CS3103 Assignment 4  
 **Date**: November 2025
 
