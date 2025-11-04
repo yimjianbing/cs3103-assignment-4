@@ -4,7 +4,6 @@
 
 ### 1. Run Tests (Verify Installation)
 ```bash
-cd hudp/
 python test_hudp.py
 ```
 

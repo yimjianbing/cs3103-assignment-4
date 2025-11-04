@@ -126,6 +126,7 @@ class SenderApp:
             
         finally:
             # Wait a bit for final ACKs
+            
             print("\nWaiting for final ACKs...")
             await asyncio.sleep(1.0)
             
@@ -141,7 +142,7 @@ class SenderApp:
                 
             # Print final stats
             print("\n" + "=" * 60)
-            print("FINAL STATISTICS")
+            print("FINAL STATISTICS FOR SENDER")
             print("=" * 60)
             self._print_stats()
             
