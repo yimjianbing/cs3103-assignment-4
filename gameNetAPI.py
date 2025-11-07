@@ -1,12 +1,3 @@
-"""
-H-UDP Transport Layer: GameNetAPIClient and GameNetAPIServer.
-
-Implements a hybrid UDP transport with:
-- Reliable channel (Selective Repeat ARQ)
-- Unreliable channel (best-effort)
-- Per-packet timers and retransmission
-- Gap skipping for low latency
-"""
 import asyncio
 import socket as socket_module
 import time
@@ -14,51 +5,29 @@ import random
 from typing import Callable, Optional, Dict, Tuple, Any
 from dataclasses import dataclass, field
 
-try:
-    from .common import (
-        Channel, Flags, PacketHeader, Packet,
-        encode_packet, decode_packet, make_ack_packet,
-        seq_in_window, DEFAULT_CONFIG, HEADER_SIZE
-    )
-except ImportError:
-    from common import (
-        Channel, Flags, PacketHeader, Packet,
-        encode_packet, decode_packet, make_ack_packet,
-        seq_in_window, DEFAULT_CONFIG, HEADER_SIZE
-    )
+from common import (
+    Channel, Flags, PacketHeader, Packet,
+    encode_packet, decode_packet, make_ack_packet,
+    seq_in_window, DEFAULT_CONFIG, HEADER_SIZE
+)
 
 
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-def get_time_ms() -> int:
-    """Get current time in milliseconds (modulo 2^32 for uint32)."""
-    return int(time.time() * 1000) % (2**32)
-
-
-# ============================================================================
-# Send Buffer Entry
-# ============================================================================
 
 @dataclass
 class SendBufferEntry:
-    """Entry in the reliable send buffer."""
+    # dataclass used for storing the packet data in the send buffer
     payload: bytes
     first_sent_ms: int
     last_sent_ms: int
     retx_count: int = 0
+    
+def get_time_ms() -> int:
+    # return current time in milliseconds 
+    return int(time.time() * 1000) % (2**32)
 
-
-# ============================================================================
-# Transport Protocol Base
-# ============================================================================
 
 class HUDPProtocol(asyncio.DatagramProtocol):
-    """
-    Base DatagramProtocol for H-UDP transport.
-    Handles packet encoding/decoding and loss simulation.
-    """
+    # base datagram protocol for H-UDP transport. handles packet encoding/decoding and loss simulation by inheriting the methods of the asyncio.DatagramProtocol class.
     
     def __init__(self, recv_cb: Callable[[Dict[str, Any]], None], log_cb: Optional[Callable[[Dict[str, Any]], None]], config: Dict[str, Any]):
         self.recv_cb = recv_cb
@@ -66,7 +35,7 @@ class HUDPProtocol(asyncio.DatagramProtocol):
         self.config = config
         self.transport: Optional[asyncio.DatagramTransport] = None
         
-        # Statistics
+        # statistics for the transport protocol
         self.stats: Dict[str, Any] = {
             "tx_total": 0,
             "tx_reliable": 0,
@@ -80,7 +49,7 @@ class HUDPProtocol(asyncio.DatagramProtocol):
         }
         
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
-        """Called when connection is established."""
+        # method that sets up a transport object from asyncio, and configuring the buffer sizes for the socket
         self.transport = transport  # type: ignore
         
         # Set socket buffer sizes
@@ -98,33 +67,26 @@ class HUDPProtocol(asyncio.DatagramProtocol):
                     self.config["socket_sndbuf"]
                 )
             except OSError:
-                pass  # Best effort
+                pass  
                 
     def connection_lost(self, exc):
-        """Called when connection is lost."""
+        # handler method that is called when the connection is lost
         pass
         
     def datagram_received(self, data: bytes, addr: tuple):
-        """
-        Called when a datagram is received.
-        Subclasses should override to handle specific logic.
-        """
+        # handler method that is called when a datagram is received
         pass
         
     def error_received(self, exc):
-        """Called when a send/receive error occurs."""
+        # handler method for logging the error if the log_cb is provided
         if self.log_cb:
             self.log_cb({"event": "error", "exception": str(exc)})
             
     def send_raw(self, data: bytes, addr: tuple):
-        """
-        Send raw packet with optional loss simulation.
+        # main function that sends a raw packet with optional loss simulation
         
-        Args:
-            data: Packet bytes
-            addr: Destination address
-        """
-        # Loss simulation
+        
+        # use random library to simulate loss by checking if the random number generated is less than the loss probability
         if random.random() < self.config["loss_prob"]:
             if self.log_cb:
                 self.log_cb({"event": "simulate_loss", "size": len(data)})

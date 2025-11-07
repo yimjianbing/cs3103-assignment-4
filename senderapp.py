@@ -1,8 +1,5 @@
-"""
-H-UDP Sender Application - Simplified version.
 
-Just connect to server and send data. Minimal boilerplate.
-"""
+
 import asyncio
 import argparse
 import time
@@ -10,34 +7,34 @@ import random
 from gameNetAPI import GameNetAPIClient
 
 
+# async main function to allow the client to run asynchronously
 async def main(server_ip: str, server_port: int, pps: float, 
                reliable_ratio: float, duration_sec: float, loss_prob: float = 0.0):
-    """Simple sender - just provide server address and send data."""
     
-    # Simple stats tracking
     stats = {"sent": 0, "reliable": 0, "unreliable": 0}
     
-    # Create client
+    # instantiate gamenetapi client with server address and callback on packet sent
     client = GameNetAPIClient(
         server_addr=(server_ip, server_port),
-        recv_cb=None,  # Optional - only if expecting replies
+        recv_cb=None, # none since the client need not send any ack packets
         log_cb=None,
         config={"loss_prob": loss_prob}
     )
     
     print(f"Sending to {server_ip}:{server_port} at {pps} pps for {duration_sec}s")
-    
-    # Send packets
+       # Send packets
     delay = 1.0 / pps if pps > 0 else 0
     end_time = time.time() + duration_sec
     
     try:
         while time.time() < end_time:
-            # Decide reliable or unreliable
+            
+            # call random library to get a random number between 0 and 1 and compare it with reliable_ratio to decide if the packet is reliable or unreliable
             reliable = random.random() < reliable_ratio
+            # encode the payload with the sequence number and the reliability
             payload = f"MSG {stats['sent']} {'REL' if reliable else 'UNREL'}".encode()
             
-            # Send - that's it!
+            # call gamenetapi client to send the packet
             await client.send(payload, reliable=reliable)
             stats["sent"] += 1
             if reliable:
@@ -50,18 +47,18 @@ async def main(server_ip: str, server_port: int, pps: float,
     except KeyboardInterrupt:
         print("\nInterrupted")
     finally:
-        await asyncio.sleep(0.5)  # Wait for final ACKs
+        await asyncio.sleep(0.5) 
         await client.close()
         
-        # Print final statistics
+        # logic for printing the final statistics
         print("\n" + "=" * 60)
-        print("FINAL STATISTICS")
+        print("FINAL STATISTICS FOR CLIENT")
         print("=" * 60)
         print(f"  Sent: {stats['sent']:6d} total")
         print(f"    Reliable:   {stats['reliable']:6d}")
         print(f"    Unreliable: {stats['unreliable']:6d}")
         
-        # Protocol-level stats if available
+        # logic for printing the overall runtime stats if available
         if client.protocol:
             proto = client.protocol.stats
             print(f"\n  Protocol Stats:")
