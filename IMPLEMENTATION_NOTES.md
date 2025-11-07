@@ -41,17 +41,18 @@ This is a complete implementation of a Hybrid UDP (H-UDP) transport layer design
 ### 📁 File Structure
 
 ```
-/hudp/
+/cs3103-assignment-4/
 ├── __init__.py              # Package initialization
-├── common.py                # Constants, enums, codec functions
-├── gamenetapi.py            # Core transport (Client & Server)
+├── common.py                # Constants, enums, codec, utilities (ClientState, jitter calc)
+├── gameNetAPI.py            # Core transport (Client & Server with signal handling)
 ├── senderapp.py             # Demo client application
 ├── recvapp.py               # Demo server application
-├── test_hudp.py             # Comprehensive test suite
-├── example.py               # Simple usage example
-├── README.md                # User documentation
+├── demo.sh                  # Automated demo script
+├── readme.md                # User documentation
 ├── IMPLEMENTATION_NOTES.md  # This file
-└── demo.sh                  # Quick demo script
+├── DELIVERABLES.md          # Specification compliance checklist
+├── PACKET_FORMAT.md         # Detailed packet format reference
+└── QUICKSTART.md            # Quick start guide
 ```
 
 ### 🔧 Key Design Decisions
@@ -77,9 +78,15 @@ This is a complete implementation of a Hybrid UDP (H-UDP) transport layer design
 - Both channels share same socket (multiplexed by channel field)
 
 #### 5. Per-Client State
-- Server maintains separate state for each client address
+- Server maintains separate state for each client address (using `ClientState` dataclass)
 - Allows multiple clients to connect to single server
 - Each client has independent sequence spaces
+- `ClientState` moved to `common.py` for better organization
+
+#### 6. Signal Handling
+- `GameNetAPIServer.run_until_shutdown()` handles SIGINT and SIGTERM gracefully
+- Ensures statistics are always printed on shutdown
+- Proper cleanup of resources (timers, sockets, tasks)
 
 ### ⚙️ Configuration Parameters
 
@@ -92,27 +99,14 @@ This is a complete implementation of a Hybrid UDP (H-UDP) transport layer design
 | `max_retx`             | 10      | Max retransmissions before drop           |
 | `gap_skip_timeout_ms`  | 200     | Time before skipping missing packet       |
 
-### 📊 Test Results
+### 📊 Performance Characteristics
 
-#### Unit Tests
-- ✅ Header encoding/decoding (all field combinations)
-- ✅ Sequence number wraparound math
-- ✅ ACK packet generation
-
-#### Integration Tests
-- ✅ Basic unreliable transmission (10 packets)
-- ✅ Basic reliable transmission (10 packets, in-order)
-- ✅ Reliable with 10% loss (retransmissions working)
-- ✅ Gap skipping with 30% loss (skip events triggered)
-- ✅ Mixed traffic (reliable + unreliable)
-- ✅ Window limits (send window enforced)
-
-#### Performance Characteristics
 - **Loopback throughput**: ~5000 pps (application-limited)
 - **RTT (no loss)**: 0.5-2ms average
 - **Delivery rate (5% loss)**: 99.5% (with retransmissions)
 - **Delivery rate (15% loss)**: 95-97%
 - **CPU usage**: ~15% @ 1000 pps (single core)
+- **Statistics tracked**: bytes sent/received, reordering detection, jitter (RFC 3550)
 
 ### 🎯 Acceptance Criteria Status
 
@@ -164,20 +158,18 @@ asyncio.run(main())
 #### Minimal Server
 ```python
 import asyncio
-from gamenetapi import GameNetAPIServer
+from gameNetAPI import GameNetAPIServer
 
 async def main():
     server = GameNetAPIServer(
-        ("0.0.0.0", 9000),
+        bind_addr=("0.0.0.0", 9000),
         recv_cb=lambda pkt: print(f"Received: {pkt}"),
         log_cb=None
     )
     
-    await server.start()
-    
-    # Run forever
-    while True:
-        await asyncio.sleep(1)
+    # Run until SIGINT/SIGTERM (handles graceful shutdown)
+    await server.run_until_shutdown()
+    await server.close()
 
 asyncio.run(main())
 ```
@@ -203,33 +195,18 @@ asyncio.run(main())
 
 ### 🧪 Testing Instructions
 
-**Run all tests:**
+**Run automated demo:**
 ```bash
-cd hudp/
-python test_hudp.py
+./demo.sh
 ```
 
-**Run demo:**
+**Run manual demo:**
 ```bash
 # Terminal 1
 python recvapp.py --bind-port 9000
 
 # Terminal 2
 python senderapp.py --server-port 9000 --pps 50 --reliable-ratio 0.6 --duration-sec 10
-```
-
-**Run with loss simulation:**
-```bash
-# Terminal 1
-python recvapp.py --bind-port 9000 --loss 0.1
-
-# Terminal 2
-python senderapp.py --server-port 9000 --pps 100 --reliable-ratio 0.8 --duration-sec 20 --loss 0.1
-```
-
-**Run simple example:**
-```bash
-python example.py
 ```
 
 ### 📈 Performance Tuning Guide
@@ -256,11 +233,11 @@ python example.py
 
 This implementation demonstrates:
 1. **Network protocols**: Selective Repeat ARQ, sliding windows
-2. **Async programming**: Python asyncio patterns
+2. **Async programming**: Python asyncio patterns, signal handling
 3. **Binary protocols**: Struct packing, network byte order
 4. **State machines**: Send/receive windows, gap tracking
-5. **Testing**: Unit tests, integration tests, loss simulation
-6. **Systems programming**: Socket buffers, timers, concurrency
+5. **Systems programming**: Socket buffers, timers, concurrency
+6. **Statistics & metrics**: RTT measurement, jitter calculation (RFC 3550), reordering detection
 
 ### 📚 References
 

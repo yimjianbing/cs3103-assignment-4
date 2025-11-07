@@ -3,11 +3,11 @@ import signal
 import socket as socket_module
 import time
 from typing import Callable, Optional, Dict, Tuple, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 from common import (
-    Channel, Flags, PacketHeader, Packet,
+    Channel, Flags, PacketHeader, Packet, ClientState,
     encode_packet, decode_packet, make_ack_packet,
     seq_in_window, DEFAULT_CONFIG, HEADER_SIZE
 )
@@ -196,7 +196,7 @@ class ClientProtocol(HUDPProtocol):
         self.unrel_seq = 0
         
         # Timers
-        self.retx_tasks: Dict[int, asyncio.Task] = {}
+        self.retx_tasks: Dict[int, asyncio.Task[None]] = {}
         
         # Synchronization
         self.window_available = asyncio.Event()
@@ -207,7 +207,7 @@ class ClientProtocol(HUDPProtocol):
         # handler method that is called when the connection is established
         super().connection_made(transport)
         
-    async def send_reliable(self, payload: bytes):
+    async def send_reliable(self, payload: bytes) -> None:
         # main function that sends the data on the reliable channel
         
         if len(payload) + HEADER_SIZE > self.config["mtu"]: # check if the payload is too large for the MTU
@@ -262,7 +262,7 @@ class ClientProtocol(HUDPProtocol):
         # start the retransmission timer for the packet
         self.retx_tasks[seq] = asyncio.create_task(self._retx_timer(seq))
         
-    async def send_unreliable(self, payload: bytes):
+    async def send_unreliable(self, payload: bytes) -> None:
         # function used by the send() function to send data packet on the unreliable channel
         
         if len(payload) + HEADER_SIZE > self.config["mtu"]:
@@ -485,7 +485,7 @@ class ClientProtocol(HUDPProtocol):
         self.closed = True
         
         # cancel all the retransmission timers for the packets
-        for task in self.retx_tasks.values():
+        for task in list[asyncio.Task[None]](self.retx_tasks.values()):
             task.cancel()
         self.retx_tasks.clear()
         
@@ -590,7 +590,7 @@ class ServerProtocol(HUDPProtocol):
         self.clients: Dict[Tuple[str, int], ClientState] = {}
         
         # gap checking task
-        self.gap_check_task: Optional[asyncio.Task] = None
+        self.gap_check_task: Optional[asyncio.Task[None]] = None
         self.closed = False
         
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
@@ -673,7 +673,7 @@ class ServerProtocol(HUDPProtocol):
             self.stats["rx_unreliable"] += 1
             self._handle_unreliable_data(packet, addr, now_ms)
             
-    def _handle_reliable_data(self, packet: Packet, addr: Tuple[str, int], client_state , now_ms: int):
+    def _handle_reliable_data(self, packet: Packet, addr: Tuple[str, int], client_state: ClientState, now_ms: int):
         # handler method that is called when a reliable data packet is received
         seq = packet.header.seq
         
@@ -710,7 +710,7 @@ class ServerProtocol(HUDPProtocol):
         # try to deliver the in-order packets
         self._deliver_in_order(client_state, addr)
         
-    def _deliver_in_order(self, client_state, addr: Tuple[str, int], skipped: bool = False):
+    def _deliver_in_order(self, client_state: ClientState, addr: Tuple[str, int], skipped: bool = False) -> None:
         # helper method called by the _handle_reliable_data method that delivers the in-order packets from the receive buffer
         while client_state.expected_seq in client_state.recv_buffer:
             seq: int = client_state.expected_seq
@@ -806,11 +806,3 @@ class ServerProtocol(HUDPProtocol):
             except asyncio.CancelledError:
                 pass
 
-
-@dataclass
-class ClientState:
-    # class for the per-client state on the server
-    expected_seq: int = 0
-    recv_buffer: Dict[int, bytes] = field(default_factory=dict)
-    delivered_seqs: set = field(default_factory=set)
-    gap_first_seen: Dict[int, int] = field(default_factory=dict)

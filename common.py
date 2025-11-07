@@ -26,7 +26,8 @@ generated with ai
 import struct
 from enum import IntEnum, IntFlag
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Dict, List, Set
+from dataclasses import field
 
 # ============================================================================
 # Protocol Constants
@@ -125,9 +126,30 @@ def make_ack_packet(seq: int, ts_ms: int) -> bytes:
     )
 
 
+@dataclass
+class ClientState:
+    # class for the per-client state on the server
+    expected_seq: int = 0
+    recv_buffer: Dict[int, bytes] = field(default_factory=dict)
+    delivered_seqs: Set[int] = field(default_factory=set)
+    gap_first_seen: Dict[int, int] = field(default_factory=dict)
+
 # ============================================================================
 # Utility Functions
 # ============================================================================
+
+def compute_rfc3550_jitter(samples_ms: List[int]) -> float:
+    # compute jitter using the RFC 3550 formula on a sequence of delay samples
+    if not samples_ms or len(samples_ms) < 2:
+        return 0.0
+
+    j = 0.0
+    last = samples_ms[0]
+    for s in samples_ms[1:]:
+        d = abs(s - last)
+        j = j + (d - j) / 16.0
+        last = s
+    return j
 
 def seq_lt(a: int, b: int, modulo: int = 65536) -> bool:
     # check if the sequence number is less than the other sequence number

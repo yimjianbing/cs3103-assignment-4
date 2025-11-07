@@ -5,23 +5,9 @@ import argparse
 import time
 import random
 from gameNetAPI import GameNetAPIClient
+from common import compute_rfc3550_jitter
 
-def compute_rfc3550_jitter(samples_ms):
-    """
-    Compute jitter using the RFC 3550 formula on a sequence of delay samples
-    J <- J + (|D(i-1,i)| - J) / 16
-    Where D(i-1,i) is the difference between consecutive samples
-    """
-    if not samples_ms or len(samples_ms) < 2:
-        return 0.0
 
-    j = 0.0
-    last = samples_ms[0]
-    for s in samples_ms[1:]:
-        d = abs(s - last)
-        j = j + (d - j) / 16.0
-        last = s
-    return j
 
 # async main function to allow the client to run asynchronously
 async def main(server_ip: str, server_port: int, pps: float, 

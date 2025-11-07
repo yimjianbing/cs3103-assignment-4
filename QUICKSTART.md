@@ -14,38 +14,33 @@ python recvapp.py --bind-port 9000
 python senderapp.py --server-port 9000 --pps 50 --reliable-ratio 0.6 --duration-sec 10
 ```
 
-### 2. Test with Packet Loss
+### 2. Run Automated Demo
 
-**Terminal 1** (Server with 10% loss):
+Run the automated demo script:
 ```bash
-python recvapp.py --bind-port 9000 --loss 0.1
+./demo.sh
 ```
 
-**Terminal 2** (Client with 10% loss):
-```bash
-python senderapp.py --server-port 9000 --pps 100 --reliable-ratio 0.8 \
-    --duration-sec 20 --loss 0.1
-```
-
-Watch the retransmissions happen automatically!
+This will start both sender and receiver, run for 5 seconds, and display statistics.
 
 ---
 
 ## 📚 What's Included
 
 ### Core Files
-- `common.py` - Protocol constants, packet codec
-- `gamenetapi.py` - Main transport implementation
+- `common.py` - Protocol constants, packet codec, utilities
+- `gameNetAPI.py` - Main transport implementation
 - `senderapp.py` - Demo client application  
 - `recvapp.py` - Demo server application
 
 ### Documentation
-- `README.md` - Full user guide
+- `readme.md` - Full user guide
 - `IMPLEMENTATION_NOTES.md` - Technical details
 - `DELIVERABLES.md` - Specification compliance checklist
+- `PACKET_FORMAT.md` - Detailed packet format reference
 - `QUICKSTART.md` - This file
 
-### Examples
+### Scripts
 - `demo.sh` - Automated demo script
 
 ---
@@ -65,22 +60,23 @@ Watch the retransmissions happen automatically!
 
 ```python
 import asyncio
-from gamenetapi import GameNetAPIClient, GameNetAPIServer
+from gameNetAPI import GameNetAPIClient, GameNetAPIServer
 
 # Server
 async def run_server():
     server = GameNetAPIServer(
-        ("127.0.0.1", 9000),
+        bind_addr=("127.0.0.1", 9000),
         recv_cb=lambda pkt: print(f"Received: {pkt['payload']}"),
         log_cb=None
     )
-    await server.start()
-    # Run forever...
+    # Run until SIGINT/SIGTERM (handles graceful shutdown automatically)
+    await server.run_until_shutdown()
+    await server.close()
 
 # Client
 async def run_client():
     client = GameNetAPIClient(
-        ("127.0.0.1", 9000),
+        server_addr=("127.0.0.1", 9000),
         recv_cb=lambda pkt: print(f"Got: {pkt['payload']}"),
         log_cb=None
     )
@@ -151,9 +147,9 @@ config = {
 
 ## 📖 Next Steps
 
-1. Read `README.md` for full API documentation
+1. Read `readme.md` for full API documentation
 2. Read `IMPLEMENTATION_NOTES.md` for technical details
-3. Modify `example.py` to experiment
+3. Read `PACKET_FORMAT.md` for packet structure details
 4. Build your own game networking!
 
 ---

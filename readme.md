@@ -98,13 +98,17 @@ UNRELIABLE Data Packet:
 ## File Structure
 
 ```
-/hudp/
-├── common.py           # Constants, enums, packet codec
-├── gamenetapi.py       # Core transport (Client & Server)
+/cs3103-assignment-4/
+├── common.py           # Constants, enums, packet codec, utilities
+├── gameNetAPI.py       # Core transport (Client & Server)
 ├── senderapp.py        # Demo client application
 ├── recvapp.py          # Demo server application
-├── test_hudp.py        # Comprehensive test suite
-└── README.md           # This file
+├── demo.sh             # Automated demo script
+├── readme.md           # This file
+├── IMPLEMENTATION_NOTES.md  # Technical details
+├── DELIVERABLES.md     # Specification compliance
+├── PACKET_FORMAT.md    # Packet format reference
+└── QUICKSTART.md       # Quick start guide
 ```
 
 ## Installation
@@ -185,48 +189,22 @@ python senderapp.py --server-port 9000 --pps 100 --reliable-ratio 0.9 \
     --duration-sec 20 --loss 0.15 --retx 150
 ```
 
-## Running Tests
+## Running Demo
 
+**Automated demo:**
 ```bash
-python test_hudp.py
+./demo.sh
 ```
 
-**Test Coverage**:
-- ✅ Header encoding/decoding round-trip
-- ✅ Sequence number wraparound math
-- ✅ Basic unreliable transmission
-- ✅ Basic reliable transmission (in-order delivery)
-- ✅ Reliable transmission with packet loss and retransmissions
-- ✅ Gap skipping under persistent loss
-- ✅ Mixed reliable/unreliable traffic
-- ✅ Send window flow control
-
-Expected output:
-```
-================================================================================
-H-UDP TRANSPORT TESTS
-================================================================================
-
-UNIT TESTS
---------------------------------------------------------------------------------
-Testing header codec...
-  ✓ Header codec tests passed
-Testing ACK packet creation...
-  ✓ ACK packet tests passed
-Testing sequence number math...
-  ✓ Sequence number math tests passed
-
-INTEGRATION TESTS
---------------------------------------------------------------------------------
-Testing basic unreliable transmission...
-  ✓ Basic unreliable transmission tests passed
-Testing basic reliable transmission...
-  ✓ Basic reliable transmission tests passed
-...
-================================================================================
-ALL TESTS PASSED ✓
-================================================================================
-```
+This will:
+- Start receiver in background
+- Run sender for 5 seconds at 20 pps
+- Display comprehensive statistics including:
+  - Packets sent/received (reliable/unreliable)
+  - Retransmissions and RTT
+  - Bytes transferred
+  - Reordering detection
+  - Jitter measurements (RFC 3550)
 
 ## Configuration Parameters
 
@@ -252,7 +230,7 @@ All parameters can be overridden via the `config` dict passed to `GameNetAPIClie
 ### GameNetAPIClient
 
 ```python
-from gamenetapi import GameNetAPIClient
+from gameNetAPI import GameNetAPIClient
 
 def on_receive(packet: dict):
     """
@@ -289,7 +267,7 @@ await client.close()
 ### GameNetAPIServer
 
 ```python
-from gamenetapi import GameNetAPIServer
+from gameNetAPI import GameNetAPIServer
 
 def on_receive(packet: dict):
     print(f"Server received: {packet}")
@@ -301,12 +279,17 @@ server = GameNetAPIServer(
     config={"gap_skip_timeout_ms": 250}
 )
 
-await server.start()
+# Run until SIGINT/SIGTERM (handles graceful shutdown automatically)
+await server.run_until_shutdown()
 
-# Run forever...
-
+# Clean up
 await server.close()
 ```
+
+**New in this version:**
+- `run_until_shutdown()` method handles SIGINT and SIGTERM signals gracefully
+- Ensures statistics are always printed on shutdown
+- Proper cleanup of all resources (timers, sockets, tasks)
 
 ## Event Logging
 

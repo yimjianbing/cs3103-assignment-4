@@ -1,30 +1,12 @@
-"""
-H-UDP Receiver Application - Simplified version.
-
-Just bind to an address and receive packets. Minimal boilerplate.
-"""
 import asyncio
 import argparse
 import time
 from typing import Any, Dict
 from gameNetAPI import GameNetAPIServer
-
-# same jitter helper for one-way latency samples
-def compute_rfc3550_jitter(samples_ms):
-    if not samples_ms or len(samples_ms) < 2:
-        return 0.0
-    j = 0.0
-    last = samples_ms[0]
-    for s in samples_ms[1:]:
-        d = abs(s - last)
-        j = j + (d - j) / 16.0
-        last = s
-    return j
+from common import compute_rfc3550_jitter
 
 async def main(bind_ip: str, bind_port: int):
-    """Simple receiver - just provide address and handle packets."""
-    
-    # Stats tracking
+    # stats tracking
     stats = {
         "total": 0,
         "reliable": 0,
@@ -113,7 +95,7 @@ async def main(bind_ip: str, bind_port: int):
         print(f"  Reordered REL:   {stats['reordered_rel']:6d}") 
         print(f"  Reordered UNREL: {stats['reordered_unrel']:6d}")
 
-        # Unreliable latency & jitter
+        # for unreliable channel, print the average latency and jitter
         if stats["unrel_lat_samples"]:
             avg_unrel_lat = sum(stats["unrel_lat_samples"]) / len(stats["unrel_lat_samples"])
             unrel_jitter = compute_rfc3550_jitter(stats["unrel_lat_samples"])
