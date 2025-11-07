@@ -77,6 +77,11 @@ class HUDPProtocol(asyncio.DatagramProtocol):
             "retx_count": 0,
             "skip_count": 0,
             "rtt_samples": [],
+            "rtt_jitter": 0.0,              
+            "last_rtt": None,               
+            "unrel_lat_samples": [],        
+            "unrel_jitter": 0.0,            
+            "unrel_last_transit": None,
         }
         
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
@@ -453,6 +458,16 @@ class ClientProtocol(HUDPProtocol):
             self.stats["rtt_samples"].append(rtt_ms)
             if len(self.stats["rtt_samples"]) > 100:
                 self.stats["rtt_samples"].pop(0)
+
+            # RFC3550-style jitter on RTT
+            last = self.stats["last_rtt"]
+            if last is None:
+                self.stats["last_rtt"] = rtt_ms
+            else:
+                d = abs(rtt_ms - last)
+                j = self.stats["rtt_jitter"]
+                self.stats["rtt_jitter"] = j + (d - j) / 16.0
+                self.stats["last_rtt"] = rtt_ms
                 
             self.log_event({
                 "event": "ack_rx",
@@ -813,6 +828,21 @@ class ServerProtocol(HUDPProtocol):
             "ts_ms": packet.header.ts_ms,
             "arrival_ms": now_ms
         })
+
+        # one-way latency n jitter for unreliable channel
+        transit = now_ms - packet.header.ts_ms
+        self.stats["unrel_lat_samples"].append(transit)
+        if len(self.stats["unrel_lat_samples"]) > 100:
+            self.stats["unrel_lat_samples"].pop(0)
+        
+        last = self.stats["unrel_last_transit"]
+        if last is None:
+            self.stats["unrel_last_transit"] = transit
+        else:
+            d = abs(transit - last)
+            j = self.stats["unrel_jitter"]
+            self.stats["unrel_jitter"] = j + (d - j) / 16.0
+            self.stats["unrel_last_transit"] = transit
         
         # Deliver immediately
         self.recv_cb({
@@ -851,4 +881,3 @@ class ClientState:
     recv_buffer: Dict[int, bytes] = field(default_factory=dict)
     delivered_seqs: set = field(default_factory=set)
     gap_first_seen: Dict[int, int] = field(default_factory=dict)
-

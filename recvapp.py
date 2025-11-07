@@ -5,22 +5,56 @@ Just bind to an address and receive packets. Minimal boilerplate.
 """
 import asyncio
 import argparse
+import time
 from gameNetAPI import GameNetAPIServer
 
+# same jitter helper for one-way latency samples
+def compute_rfc3550_jitter(samples_ms):
+    if not samples_ms or len(samples_ms) < 2:
+        return 0.0
+    j = 0.0
+    last = samples_ms[0]
+    for s in samples_ms[1:]:
+        d = abs(s - last)
+        j = j + (d - j) / 16.0
+        last = s
+    return j
 
 async def main(bind_ip: str, bind_port: int, loss_prob: float = 0.0):
     """Simple receiver - just provide address and handle packets."""
     
-    # Simple stats tracking
-    stats = {"total": 0, "reliable": 0, "unreliable": 0, "skipped": 0}
+    # Stats tracking
+    stats = {
+        "total": 0,
+        "reliable": 0,
+        "unreliable": 0,
+        "skipped": 0,
+        "bytes_rel": 0,       
+        "bytes_unrel": 0,     
+        "unrel_lat_samples": [], 
+    }
     
     def on_packet(pkt):
         """Handle received packet."""
         stats["total"] += 1
+        payload_len = len(pkt["payload"])
+        
+        # Compute approximate one-way latency for unreliable using ts_ms header
+        now_ms = int(time.time() * 1000)     
         if pkt["channel"] == "RELIABLE":
             stats["reliable"] += 1
+            stats["bytes_rel"] += payload_len    
         else:
             stats["unreliable"] += 1
+            stats["bytes_unrel"] += payload_len  
+            ts_ms = pkt.get("ts_ms", 0)
+            if ts_ms:                           
+                transit = now_ms - ts_ms
+                stats["unrel_lat_samples"].append(transit)
+                # keep list bounded              
+                if len(stats["unrel_lat_samples"]) > 100:
+                    stats["unrel_lat_samples"].pop(0)
+        
         if pkt.get("skipped"):
             stats["skipped"] += 1
         
@@ -61,6 +95,15 @@ async def main(bind_ip: str, bind_port: int, loss_prob: float = 0.0):
         print(f"    Reliable:   {stats['reliable']:6d}")
         print(f"    Unreliable: {stats['unreliable']:6d}")
         print(f"    Skipped:    {stats['skipped']:6d} gaps")
+        print(f"  Bytes (REL):  {stats['bytes_rel']:6d}")      
+        print(f"  Bytes (UNREL):{stats['bytes_unrel']:6d}") 
+
+        # Unreliable latency & jitter
+        if stats["unrel_lat_samples"]:
+            avg_unrel_lat = sum(stats["unrel_lat_samples"]) / len(stats["unrel_lat_samples"])
+            unrel_jitter = compute_rfc3550_jitter(stats["unrel_lat_samples"])
+            print(f"\n  UNREL Latency (one-way): {avg_unrel_lat:6.1f} ms")  
+            print(f"  UNREL Jitter (RFC3550):  {unrel_jitter:6.1f} ms") 
         
         if server.protocol:
             proto = server.protocol.stats
@@ -79,4 +122,3 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     asyncio.run(main(args.bind_ip, args.bind_port, args.loss))
-

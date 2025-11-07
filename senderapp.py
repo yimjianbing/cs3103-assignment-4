@@ -9,6 +9,22 @@ import time
 import random
 from gameNetAPI import GameNetAPIClient
 
+def compute_rfc3550_jitter(samples_ms):
+    """
+    Compute jitter using the RFC 3550 formula on a sequence of delay samples
+    J <- J + (|D(i-1,i)| - J) / 16
+    Where D(i-1,i) is the difference between consecutive samples
+    """
+    if not samples_ms or len(samples_ms) < 2:
+        return 0.0
+
+    j = 0.0
+    last = samples_ms[0]
+    for s in samples_ms[1:]:
+        d = abs(s - last)
+        j = j + (d - j) / 16.0
+        last = s
+    return j
 
 async def main(server_ip: str, server_port: int, pps: float, 
                reliable_ratio: float, duration_sec: float, loss_prob: float = 0.0):
@@ -71,7 +87,12 @@ async def main(server_ip: str, server_port: int, pps: float,
             print(f"    Retransmissions: {proto['retx_count']:6d}")
             if proto['rtt_samples']:
                 avg_rtt = sum(proto['rtt_samples']) / len(proto['rtt_samples'])
-                print(f"    Avg RTT: {avg_rtt:6.1f} ms")
+                # compute RTT jitter for reliable channel using RFC3550
+                rtt_jitter = compute_rfc3550_jitter(proto['rtt_samples'])
+                print(f"    Avg RTT (REL):   {avg_rtt:6.1f} ms")
+                print(f"    RTT Jitter (REL):{rtt_jitter:6.1f} ms")   
+            else:
+                print("    No RTT samples collected (no reliable packets or no ACKs).")
 
 
 if __name__ == "__main__":
@@ -86,4 +107,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     asyncio.run(main(args.server_ip, args.server_port, args.pps, 
                      args.reliable_ratio, args.duration_sec, args.loss))
-
