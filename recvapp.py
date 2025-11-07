@@ -20,7 +20,7 @@ def compute_rfc3550_jitter(samples_ms):
         last = s
     return j
 
-async def main(bind_ip: str, bind_port: int, loss_prob: float = 0.0):
+async def main(bind_ip: str, bind_port: int):
     """Simple receiver - just provide address and handle packets."""
     
     # Stats tracking
@@ -89,7 +89,7 @@ async def main(bind_ip: str, bind_port: int, loss_prob: float = 0.0):
         bind_addr=(bind_ip, bind_port),
         recv_cb=on_packet,
         log_cb=on_log,
-        config={"loss_prob": loss_prob}
+        config=None
     )
     
     # Start server
@@ -138,7 +138,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="H-UDP Receiver")
     parser.add_argument("--bind-ip", default="127.0.0.1", help="Bind IP")
     parser.add_argument("--bind-port", type=int, default=9000, help="Bind port")
-    parser.add_argument("--loss", type=float, default=0.0, help="Loss probability")
     
     args = parser.parse_args()
-    asyncio.run(main(args.bind_ip, args.bind_port, args.loss))
+    asyncio.run(main(args.bind_ip, args.bind_port))

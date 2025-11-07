@@ -27,7 +27,7 @@ def compute_rfc3550_jitter(samples_ms):
     return j
 
 async def main(server_ip: str, server_port: int, pps: float, 
-               reliable_ratio: float, duration_sec: float, loss_prob: float = 0.0):
+               reliable_ratio: float, duration_sec: float):
     """Simple sender - just provide server address and send data."""
     
     # Simple stats tracking
@@ -38,7 +38,7 @@ async def main(server_ip: str, server_port: int, pps: float,
         server_addr=(server_ip, server_port),
         recv_cb=None,  # Optional - only if expecting replies
         log_cb=None,
-        config={"loss_prob": loss_prob}
+        config=None
     )
     
     print(f"Sending to {server_ip}:{server_port} at {pps} pps for {duration_sec}s")
@@ -102,8 +102,7 @@ if __name__ == "__main__":
     parser.add_argument("--pps", type=float, default=10, help="Packets per second")
     parser.add_argument("--reliable-ratio", type=float, default=0.5, help="Reliable ratio (0.0-1.0)")
     parser.add_argument("--duration-sec", type=float, default=10, help="Duration")
-    parser.add_argument("--loss", type=float, default=0.0, help="Loss probability")
     
     args = parser.parse_args()
     asyncio.run(main(args.server_ip, args.server_port, args.pps, 
-                     args.reliable_ratio, args.duration_sec, args.loss))
+                     args.reliable_ratio, args.duration_sec))

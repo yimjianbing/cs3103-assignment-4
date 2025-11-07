@@ -10,7 +10,6 @@ Implements a hybrid UDP transport with:
 import asyncio
 import socket as socket_module
 import time
-import random
 from typing import Callable, Optional, Dict, Tuple, Any
 from dataclasses import dataclass, field
 
@@ -123,29 +122,13 @@ class HUDPProtocol(asyncio.DatagramProtocol):
             
     def send_raw(self, data: bytes, addr: tuple):
         """
-        Send raw packet with optional loss simulation.
+        Send raw packets directly
+        Loss simulation will be handled externally
         
         Args:
             data: Packet bytes
             addr: Destination address
         """
-        # Loss simulation
-        if random.random() < self.config["loss_prob"]:
-            if self.log_cb:
-                self.log_cb({"event": "simulate_loss", "size": len(data)})
-            return
-            
-        # Jitter/delay simulation
-        jitter_ms = self.config["jitter_ms"]
-        if jitter_ms > 0:
-            delay = random.uniform(0, jitter_ms / 1000.0)
-            asyncio.create_task(self._delayed_send(data, addr, delay))
-        else:
-            self.transport.sendto(data, addr)
-            
-    async def _delayed_send(self, data: bytes, addr: tuple, delay: float):
-        """Send packet after delay (for jitter simulation)."""
-        await asyncio.sleep(delay)
         if self.transport:
             self.transport.sendto(data, addr)
             
