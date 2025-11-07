@@ -10,7 +10,6 @@
 | `gamenetapi.py` | 28KB | Core transport (Client & Server protocols) | ✅ Complete |
 | `senderapp.py` | 7.8KB | Demo client application | ✅ Complete |
 | `recvapp.py` | 5.8KB | Demo server application | ✅ Complete |
-| `test_hudp.py` | 15KB | Comprehensive test suite | ✅ Complete |
 
 ### 2. Documentation Files
 
@@ -25,7 +24,6 @@
 | File | Size | Description | Status |
 |------|------|-------------|--------|
 | `__init__.py` | 427B | Package initialization | ✅ Complete |
-| `example.py` | 3.0KB | Simple usage example | ✅ Complete |
 | `demo.sh` | 626B | Quick demo script | ✅ Complete |
 
 ---

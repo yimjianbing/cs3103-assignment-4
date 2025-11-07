@@ -7,10 +7,11 @@ import asyncio
 import argparse
 from typing import Any, Dict
 from gameNetAPI import GameNetAPIServer
-import signal
+
+
 
 # async main function to allow the server to run asynchronously
-async def main(bind_ip: str, bind_port: int, loss_prob: float = 0.0):
+async def main(bind_ip: str, bind_port: int):
     
     stats = {"total": 0, "reliable": 0, "unreliable": 0, "skipped": 0}
     
@@ -35,18 +36,14 @@ async def main(bind_ip: str, bind_port: int, loss_prob: float = 0.0):
         bind_addr=(bind_ip, bind_port),
         recv_cb=on_packet, # callback on packet recevied to update statistics and print the payload
         log_cb=on_log, # callback on log events to print them
-        config={"loss_prob": loss_prob}
+        config=None
     )
     
-    await server.start()
     print(f"Server listening on {bind_ip}:{bind_port}")
     
-    # busy wait until keyboard interupt to terminate server process
+    # run server until SIGINT or SIGTERM is received, where the signal handlers is found in the GameNetAPIServer class
     try:
-        while True:
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        
+        await server.run_until_shutdown()
         print("\nShutting down...")
     finally:
         await server.close()
@@ -74,8 +71,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="H-UDP Receiver")
     parser.add_argument("--bind-ip", default="127.0.0.1", help="Bind IP")
     parser.add_argument("--bind-port", type=int, default=9000, help="Bind port")
-    parser.add_argument("--loss", type=float, default=0.0, help="Loss probability")
     
     args = parser.parse_args()
-    asyncio.run(main(args.bind_ip, args.bind_port, args.loss))
+    asyncio.run(main(args.bind_ip, args.bind_port))
 

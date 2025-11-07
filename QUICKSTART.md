@@ -2,38 +2,7 @@
 
 ## 🚀 5-Minute Quick Start
 
-### 1. Run Tests (Verify Installation)
-```bash
-python test_hudp.py
-```
-
-Expected output:
-```
-================================================================================
-ALL TESTS PASSED ✓
-================================================================================
-```
-
-### 2. Run Simple Example
-```bash
-python example.py
-```
-
-Expected output:
-```
-[SERVER] Started on 127.0.0.1:19990
-[CLIENT] Connected to server
-
-[CLIENT] Sending unreliable packets...
-[SERVER] Received UNRELIABLE packet: seq=    0, payload=Position update 0...
-...
-[CLIENT] Sending reliable packets...
-[SERVER] Received RELIABLE  packet: seq=    0, payload=Player action 0...
-...
-[MAIN] Example complete!
-```
-
-### 3. Run Full Demo (Two Terminals)
+### 1. Run Full Demo (Two Terminals)
 
 **Terminal 1** (Server):
 ```bash
@@ -45,7 +14,7 @@ python recvapp.py --bind-port 9000
 python senderapp.py --server-port 9000 --pps 50 --reliable-ratio 0.6 --duration-sec 10
 ```
 
-### 4. Test with Packet Loss
+### 2. Test with Packet Loss
 
 **Terminal 1** (Server with 10% loss):
 ```bash
@@ -69,7 +38,6 @@ Watch the retransmissions happen automatically!
 - `gamenetapi.py` - Main transport implementation
 - `senderapp.py` - Demo client application  
 - `recvapp.py` - Demo server application
-- `test_hudp.py` - Comprehensive test suite
 
 ### Documentation
 - `README.md` - Full user guide
@@ -78,7 +46,6 @@ Watch the retransmissions happen automatically!
 - `QUICKSTART.md` - This file
 
 ### Examples
-- `example.py` - Simple usage example
 - `demo.sh` - Automated demo script
 
 ---
