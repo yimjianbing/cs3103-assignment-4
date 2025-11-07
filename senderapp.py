@@ -1,12 +1,9 @@
-
-
 import asyncio
 import argparse
 import time
 import random
 from gameNetAPI import GameNetAPIClient
 from common import compute_rfc3550_jitter
-
 
 
 # async main function to allow the client to run asynchronously

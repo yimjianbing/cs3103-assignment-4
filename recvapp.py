@@ -27,7 +27,7 @@ async def main(bind_ip: str, bind_port: int):
         payload_len = len(pkt["payload"])
         
         # Compute approximate one-way latency for unreliable using ts_ms header
-        now_ms = int(time.time() * 1000)     
+        now_ms = int(time.time() * 1000) % (2**32)     
         seq = pkt["seq"]
 
         if pkt["channel"] == "RELIABLE":
@@ -122,4 +122,7 @@ if __name__ == "__main__":
     parser.add_argument("--bind-port", type=int, default=9000, help="Bind port")
     
     args = parser.parse_args()
-    asyncio.run(main(args.bind_ip, args.bind_port))
+    try:
+        asyncio.run(main(args.bind_ip, args.bind_port))
+    except KeyboardInterrupt:
+        pass
