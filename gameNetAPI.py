@@ -1,63 +1,34 @@
-"""
-H-UDP Transport Layer: GameNetAPIClient and GameNetAPIServer.
-
-Implements a hybrid UDP transport with:
-- Reliable channel (Selective Repeat ARQ)
-- Unreliable channel (best-effort)
-- Per-packet timers and retransmission
-- Gap skipping for low latency
-"""
 import asyncio
+import signal
 import socket as socket_module
 import time
 from typing import Callable, Optional, Dict, Tuple, Any
 from dataclasses import dataclass, field
 
-try:
-    from .common import (
-        Channel, Flags, PacketHeader, Packet,
-        encode_packet, decode_packet, make_ack_packet,
-        seq_in_window, DEFAULT_CONFIG, HEADER_SIZE
-    )
-except ImportError:
-    from common import (
-        Channel, Flags, PacketHeader, Packet,
-        encode_packet, decode_packet, make_ack_packet,
-        seq_in_window, DEFAULT_CONFIG, HEADER_SIZE
-    )
+
+from common import (
+    Channel, Flags, PacketHeader, Packet,
+    encode_packet, decode_packet, make_ack_packet,
+    seq_in_window, DEFAULT_CONFIG, HEADER_SIZE
+)
 
 
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-def get_time_ms() -> int:
-    """Get current time in milliseconds (modulo 2^32 for uint32)."""
-    return int(time.time() * 1000) % (2**32)
-
-
-# ============================================================================
-# Send Buffer Entry
-# ============================================================================
 
 @dataclass
 class SendBufferEntry:
-    """Entry in the reliable send buffer."""
+    # dataclass used for storing the packet data in the send buffer
     payload: bytes
     first_sent_ms: int
     last_sent_ms: int
     retx_count: int = 0
+    
+def get_time_ms() -> int:
+    # return current time in milliseconds 
+    return int(time.time() * 1000) % (2**32)
 
-
-# ============================================================================
-# Transport Protocol Base
-# ============================================================================
 
 class HUDPProtocol(asyncio.DatagramProtocol):
-    """
-    Base DatagramProtocol for H-UDP transport.
-    Handles packet encoding/decoding and loss simulation.
-    """
+    # base datagram protocol for H-UDP transport. handles packet encoding/decoding and loss simulation by inheriting the methods of the asyncio.DatagramProtocol class.
     
     def __init__(self, recv_cb: Callable[[Dict[str, Any]], None], log_cb: Optional[Callable[[Dict[str, Any]], None]], config: Dict[str, Any]):
         self.recv_cb = recv_cb
@@ -65,7 +36,7 @@ class HUDPProtocol(asyncio.DatagramProtocol):
         self.config = config
         self.transport: Optional[asyncio.DatagramTransport] = None
         
-        # Statistics
+        # statistics for the transport protocol
         self.stats: Dict[str, Any] = {
             "tx_total": 0,
             "tx_reliable": 0,
@@ -84,10 +55,10 @@ class HUDPProtocol(asyncio.DatagramProtocol):
         }
         
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
-        """Called when connection is established."""
+        # method that sets up a transport object from asyncio, and configuring the buffer sizes for the socket
         self.transport = transport  # type: ignore
         
-        # Set socket buffer sizes
+        # initialize the socket buffer sizes using config file
         sock = transport.get_extra_info('socket')
         if sock:
             try:
@@ -102,25 +73,22 @@ class HUDPProtocol(asyncio.DatagramProtocol):
                     self.config["socket_sndbuf"]
                 )
             except OSError:
-                pass  # Best effort
+                pass  
                 
-    def connection_lost(self, exc):
-        """Called when connection is lost."""
+    def connection_lost(self, exc: Optional[Exception] = None):
+        # handler method that is called when the connection is lost
         pass
         
-    def datagram_received(self, data: bytes, addr: tuple):
-        """
-        Called when a datagram is received.
-        Subclasses should override to handle specific logic.
-        """
+    def datagram_received(self, data: bytes, addr: Tuple[str, int]):
+        # handler method that is called when a datagram is received
         pass
         
-    def error_received(self, exc):
-        """Called when a send/receive error occurs."""
+    def error_received(self, exc: Optional[Exception]):
+        # handler method for logging the error if the log_cb is provided
         if self.log_cb:
             self.log_cb({"event": "error", "exception": str(exc)})
             
-    def send_raw(self, data: bytes, addr: tuple):
+    def send_raw(self, data: bytes, addr: Tuple[str, int]):
         """
         Send raw packets directly
         Loss simulation will be handled externally
@@ -131,23 +99,16 @@ class HUDPProtocol(asyncio.DatagramProtocol):
         """
         if self.transport:
             self.transport.sendto(data, addr)
+        
             
-    def log_event(self, event: dict):
-        """Log an event if log_cb is provided."""
+    def log_event(self, event: Dict[str, Any]):
+        # log an event if log_cb is provided
         if self.log_cb:
             self.log_cb(event)
 
 
-# ============================================================================
-# Client Implementation
-# ============================================================================
-
 class GameNetAPIClient:
-    """
-    Client-side H-UDP transport API.
-    
-    Provides reliable and unreliable channels over a single UDP socket.
-    """
+    # class for the client side of the gameNetAPI
     
     def __init__(
         self,
@@ -157,30 +118,21 @@ class GameNetAPIClient:
         log_cb: Optional[Callable[[Dict[str, Any]], None]] = None,
         config: Optional[Dict[str, Any]] = None
     ):
-        """
-        Initialize client.
-        
-        Args:
-            server_addr: Server (host, port) tuple
-            recv_cb: Callback for received packets: recv_cb(packet_dict)
-            log_cb: Optional callback for logging: log_cb(event_dict)
-            config: Optional config overrides
-        """
+        # initialize the client with the server address and the callback functions for receiving packets and logging events
         self.server_addr = server_addr
         self.recv_cb = recv_cb
         self.log_cb = log_cb
         self.config = {**DEFAULT_CONFIG, **(config or {})}
         
-        # Protocol instance
-        self.protocol: Optional[ClientProtocol] = None
-        self.transport: Optional[asyncio.DatagramTransport] = None
+        self.protocol: Optional[ClientProtocol] = None # protocol instance that inherits from the asyncio.DatagramProtocol class for the client
+        self.transport: Optional[asyncio.DatagramTransport] = None # transport instance from asyncio for the client
         
-        # Async initialization flag
         self._initialized = False
         self._init_lock = asyncio.Lock()
         
     async def _ensure_initialized(self):
-        """Ensure transport is initialized."""
+        # ensure that the transport is initialized
+        
         if self._initialized:
             return
             
@@ -188,9 +140,9 @@ class GameNetAPIClient:
             if self._initialized:
                 return
                 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_event_loop() # get the event loop for the asyncio library
             transport, protocol = await loop.create_datagram_endpoint(
-                lambda: ClientProtocol(
+                lambda: ClientProtocol( # lambda function to create a new instance of the ClientProtocol class
                     self.server_addr,
                     self.recv_cb,
                     self.log_cb,
@@ -204,13 +156,7 @@ class GameNetAPIClient:
             self._initialized = True
             
     async def send(self, data: bytes, reliable: bool = False) -> None:
-        """
-        Send data on reliable or unreliable channel.
-        
-        Args:
-            data: Payload to send
-            reliable: True for reliable channel, False for unreliable
-        """
+        # called by senderapp.py main function to send the data on the reliable or unreliable channel
         await self._ensure_initialized()
         
         if reliable:
@@ -219,7 +165,7 @@ class GameNetAPIClient:
             await self.protocol.send_unreliable(data)
             
     async def close(self) -> None:
-        """Close the transport."""
+        # close the transport
         if self.protocol:
             await self.protocol.close()
         if self.transport:
@@ -227,7 +173,7 @@ class GameNetAPIClient:
 
 
 class ClientProtocol(HUDPProtocol):
-    """Client-side protocol implementation."""
+    # class for the client side of the gameNetAPI
     
     def __init__(
         self,
@@ -239,7 +185,6 @@ class ClientProtocol(HUDPProtocol):
         super().__init__(recv_cb, log_cb, config)
         self.server_addr = server_addr
         
-        # Reliable channel state
         self.next_seq = 0
         self.send_buffer: Dict[int, SendBufferEntry] = {}
         self.send_window_base = 0
@@ -258,17 +203,17 @@ class ClientProtocol(HUDPProtocol):
         self.window_available.set()
         self.closed = False
         
-    def connection_made(self, transport):
-        """Called when connection is established."""
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
+        # handler method that is called when the connection is established
         super().connection_made(transport)
         
     async def send_reliable(self, payload: bytes):
-        """Send data on reliable channel."""
-        # Check MTU
-        if len(payload) + HEADER_SIZE > self.config["mtu"]:
+        # main function that sends the data on the reliable channel
+        
+        if len(payload) + HEADER_SIZE > self.config["mtu"]: # check if the payload is too large for the MTU
             raise ValueError(f"Payload too large: {len(payload)} + {HEADER_SIZE} > {self.config['mtu']}")
             
-        # Wait for window space
+        # wait for window space to be available by seeing if the number of outstanding packets is less than the send window size
         while True:
             outstanding: int = len(self.send_buffer)
             if outstanding < self.config["send_window_size"]:
@@ -278,11 +223,11 @@ class ClientProtocol(HUDPProtocol):
             if self.closed:
                 return
                 
-        # Allocate sequence number
+        # assign a new sequence number to the packet
         seq = self.next_seq
         self.next_seq = (self.next_seq + 1) % 65536
         
-        # Send packet
+        # encode the packet with the sequence number and the timestamp
         now_ms = get_time_ms()
         packet_data = encode_packet(
             channel=Channel.RELIABLE,
@@ -292,7 +237,7 @@ class ClientProtocol(HUDPProtocol):
             payload=payload
         )
         
-        # Add to send buffer
+        # add the packet to the send buffer
         self.send_buffer[seq] = SendBufferEntry(
             payload=payload,
             first_sent_ms=now_ms,
@@ -300,7 +245,7 @@ class ClientProtocol(HUDPProtocol):
             retx_count=0
         )
         
-        # Send
+        # send the packet to the server
         self.send_raw(packet_data, self.server_addr)
         self.stats["tx_total"] += 1
         self.stats["tx_reliable"] += 1
@@ -314,11 +259,12 @@ class ClientProtocol(HUDPProtocol):
             "retx": False
         })
         
-        # Start retransmission timer
+        # start the retransmission timer for the packet
         self.retx_tasks[seq] = asyncio.create_task(self._retx_timer(seq))
         
     async def send_unreliable(self, payload: bytes):
-        """Send data on unreliable channel."""
+        # function used by the send() function to send data packet on the unreliable channel
+        
         if len(payload) + HEADER_SIZE > self.config["mtu"]:
             raise ValueError(f"Payload too large: {len(payload)} + {HEADER_SIZE} > {self.config['mtu']}")
             
@@ -348,28 +294,28 @@ class ClientProtocol(HUDPProtocol):
         })
         
     async def _retx_timer(self, seq: int):
-        """Retransmission timer for a specific sequence number."""
+        # timer that is used to retransmit the packet if it is not acknowledged by the server
         try:
             await asyncio.sleep(self.config["retx_timeout_ms"] / 1000.0)
             
-            # Check if still in send buffer (not ACKed)
+            # check if the packet is still in the send buffer, meaning that it has not been acknowledged by the server
             if seq in self.send_buffer:
                 entry = self.send_buffer[seq]
                 
-                # Check max retransmissions
+                # check if the packet has exceeded max no. of transmissions
                 if entry.retx_count >= self.config["max_retx"]:
                     self.log_event({
                         "event": "drop_max_retx",
                         "seq": seq
                     })
-                    # Remove from buffer
+                    # remove the packet from the send buffer
                     del self.send_buffer[seq]
                     if seq in self.retx_tasks:
                         del self.retx_tasks[seq]
                     self.window_available.set()
                     return
                     
-                # Retransmit
+                # retransmit the packet
                 now_ms = get_time_ms()
                 entry.last_sent_ms = now_ms
                 entry.retx_count += 1
@@ -400,14 +346,14 @@ class ClientProtocol(HUDPProtocol):
                     "retx": True
                 })
                 
-                # Restart timer
+                # restart the retransmission timer for the packet
                 self.retx_tasks[seq] = asyncio.create_task(self._retx_timer(seq))
                 
         except asyncio.CancelledError:
             pass
             
     def datagram_received(self, data: bytes, addr: Tuple[str, int]):
-        """Handle received datagram."""
+        # handler method that is called when a datagram is received
         packet = decode_packet(data)
         if not packet:
             return
@@ -416,12 +362,12 @@ class ClientProtocol(HUDPProtocol):
         
         self.stats["rx_total"] += 1
         
-        # Handle ACK packets
+        # handle the acknowledgement packet
         if packet.header.is_ack():
             self._handle_ack(packet.header, now_ms)
             return
             
-        # Handle data packets
+        # handle the data packet
         if packet.header.channel == Channel.RELIABLE:
             self.stats["rx_reliable"] += 1
             self._handle_reliable_data(packet, now_ms)
@@ -430,14 +376,14 @@ class ClientProtocol(HUDPProtocol):
             self._handle_unreliable_data(packet, now_ms)
             
     def _handle_ack(self, header: PacketHeader, now_ms: int):
-        """Handle ACK packet."""
+        # handler method that is called when an acknowledgement packet is received
         seq = header.seq
         
         if seq in self.send_buffer:
             entry = self.send_buffer[seq]
             rtt_ms = now_ms - entry.first_sent_ms
             
-            # Update RTT stats
+            # update the round trip time statistics
             self.stats["rtt_samples"].append(rtt_ms)
             if len(self.stats["rtt_samples"]) > 100:
                 self.stats["rtt_samples"].pop(0)
@@ -458,22 +404,19 @@ class ClientProtocol(HUDPProtocol):
                 "rtt_ms": rtt_ms
             })
             
-            # Remove from send buffer
+            # remove the packet from the send buffer
             del self.send_buffer[seq]
             
-            # Cancel retransmission timer
+            # cancel the retransmission timer for the packet
             if seq in self.retx_tasks:
                 self.retx_tasks[seq].cancel()
                 del self.retx_tasks[seq]
                 
-            # Signal window availability
+            # signal that the window is available for sending new packets
             self.window_available.set()
             
     def _handle_reliable_data(self, packet: Packet, now_ms: int):
-        """Handle reliable data packet (client receiving from server)."""
-        # For client, we simply deliver and ACK
-        # (assuming server sends reliable data to client too)
-        
+        # handler method that is called when a reliable data packet is received
         self.log_event({
             "event": "rx_data",
             "seq": packet.header.seq,
@@ -482,7 +425,7 @@ class ClientProtocol(HUDPProtocol):
             "arrival_ms": now_ms
         })
         
-        # Send ACK
+        # send the acknowledgement packet to the server
         ack_packet = make_ack_packet(packet.header.seq, now_ms)
         self.send_raw(ack_packet, self.server_addr)
         
@@ -491,7 +434,7 @@ class ClientProtocol(HUDPProtocol):
             "ack_seq": packet.header.seq
         })
         
-        # Deliver to application
+        # deliver the packet to the application
         self.recv_cb({
             "channel": "RELIABLE",
             "seq": packet.header.seq,
@@ -510,7 +453,7 @@ class ClientProtocol(HUDPProtocol):
         })
         
     def _handle_unreliable_data(self, packet: Packet, now_ms: int):
-        """Handle unreliable data packet."""
+        # handler method that is called when an unreliable data packet is received
         self.log_event({
             "event": "rx_data",
             "seq": packet.header.seq,
@@ -519,7 +462,7 @@ class ClientProtocol(HUDPProtocol):
             "arrival_ms": now_ms
         })
         
-        # Deliver immediately
+        # deliver the packet to the application immediately
         self.recv_cb({
             "channel": "UNRELIABLE",
             "seq": packet.header.seq,
@@ -538,10 +481,10 @@ class ClientProtocol(HUDPProtocol):
         })
         
     async def close(self):
-        """Close the protocol."""
+        # close the protocol
         self.closed = True
         
-        # Cancel all retransmission timers
+        # cancel all the retransmission timers for the packets
         for task in self.retx_tasks.values():
             task.cancel()
         self.retx_tasks.clear()
@@ -554,11 +497,7 @@ class ClientProtocol(HUDPProtocol):
 # ============================================================================
 
 class GameNetAPIServer:
-    """
-    Server-side H-UDP transport API.
-    
-    Provides reliable and unreliable channels over a single UDP socket.
-    """
+    # class for the server side of the gameNetAPI
     
     def __init__(
         self,
@@ -568,30 +507,20 @@ class GameNetAPIServer:
         log_cb: Optional[Callable[[Dict[str, Any]], None]] = None,
         config: Optional[Dict[str, Any]] = None
     ):
-        """
-        Initialize server.
-        
-        Args:
-            bind_addr: Bind (host, port) tuple
-            recv_cb: Callback for received packets
-            log_cb: Optional callback for logging
-            config: Optional config overrides
-        """
+        # initialize the server with the bind address and the callback functions for receiving packets and logging events
         self.bind_addr = bind_addr
         self.recv_cb = recv_cb
         self.log_cb = log_cb
         self.config = {**DEFAULT_CONFIG, **(config or {})}
         
-        # Protocol instance
+        # protocol instance that inherits from the asyncio.DatagramProtocol class for the server
         self.protocol: Optional[ServerProtocol] = None
         self.transport: Optional[asyncio.DatagramTransport] = None
         
-        # Async initialization flag
         self._initialized = False
         self._init_lock = asyncio.Lock()
         
     async def _ensure_initialized(self):
-        """Ensure transport is initialized."""
         if self._initialized:
             return
             
@@ -614,11 +543,32 @@ class GameNetAPIServer:
             self._initialized = True
             
     async def start(self):
-        """Start the server."""
+        # start the server
         await self._ensure_initialized()
+    
+    async def run_until_shutdown(self):
+        await self.start()
+        
+        loop = asyncio.get_running_loop()
+        shutdown_event = asyncio.Event()
+        
+        def signal_handler():
+            shutdown_event.set()
+        
+        # register new handlers for both SIGINT (Ctrl+C) and SIGTERM (kill)
+        loop.add_signal_handler(signal.SIGINT, signal_handler)
+        loop.add_signal_handler(signal.SIGTERM, signal_handler)
+        
+        try:
+            # wait until a signal is received
+            await shutdown_event.wait()
+        finally:
+            # clean up signal handlers
+            loop.remove_signal_handler(signal.SIGINT)
+            loop.remove_signal_handler(signal.SIGTERM)
         
     async def close(self) -> None:
-        """Close the transport."""
+        # close the transport
         if self.protocol:
             await self.protocol.close()
         if self.transport:
@@ -626,7 +576,7 @@ class GameNetAPIServer:
 
 
 class ServerProtocol(HUDPProtocol):
-    """Server-side protocol implementation."""
+    # class for the server side of the gameNetAPI
     
     def __init__(
         self,
@@ -636,39 +586,39 @@ class ServerProtocol(HUDPProtocol):
     ):
         super().__init__(recv_cb, log_cb, config)
         
-        # Per-client state (keyed by client address)
-        self.clients: Dict[tuple, ClientState] = {}
+        # per-client state (keyed by client address)
+        self.clients: Dict[Tuple[str, int], ClientState] = {}
         
-        # Gap checking task
+        # gap checking task
         self.gap_check_task: Optional[asyncio.Task] = None
         self.closed = False
         
-    def connection_made(self, transport):
-        """Called when connection is established."""
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
+        # handler method that is called when the connection is established
         super().connection_made(transport)
         
-        # Start gap checking task
+        # start the gap checking task
         self.gap_check_task = asyncio.create_task(self._gap_checker())
         
     async def _gap_checker(self):
-        """Periodically check for gaps that should be skipped."""
+        # task that periodically checks for gaps that should be skipped
         try:
             while not self.closed:
-                await asyncio.sleep(0.05)  # Check every 50ms
+                await asyncio.sleep(0.05)  # check every 50ms if the packets are being delivered in order
                 
                 now_ms = get_time_ms()
                 
-                for addr, client_state in list[tuple[tuple[Any, ...], ClientState]](self.clients.items()):
-                    # Check for gaps in reliable delivery
+                for addr, client_state in list[tuple[Tuple[str, int], ClientState]](self.clients.items()):
+                    # check for gaps in the reliable delivery
                     if client_state.expected_seq in client_state.gap_first_seen:
                         gap_start_ms = client_state.gap_first_seen[client_state.expected_seq]
                         waited_ms = now_ms - gap_start_ms
                         
                         if waited_ms >= self.config["gap_skip_timeout_ms"]:
-                            # Skip this gap
+                            # skip this gap
                             missing_seq = client_state.expected_seq
                             
-                            # Find next available sequence
+                            # find the next available sequence
                             next_seq = None
                             for i in range(1, self.config["recv_window_size"]):
                                 candidate = (missing_seq + i) % 65536
@@ -686,7 +636,7 @@ class ServerProtocol(HUDPProtocol):
                                 
                                 self.stats["skip_count"] += 1
                                 
-                                # Advance expected_seq and deliver buffered packets
+                                # advance the expected sequence number and deliver the buffered packets
                                 client_state.expected_seq = next_seq
                                 del client_state.gap_first_seen[missing_seq]
                                 self._deliver_in_order(client_state, addr, skipped=True)
@@ -695,7 +645,7 @@ class ServerProtocol(HUDPProtocol):
             pass
             
     def datagram_received(self, data: bytes, addr: Tuple[str, int]):
-        """Handle received datagram."""
+        # handler method that is called when a datagram is received
         packet = decode_packet(data)
         if not packet:
             return  
@@ -704,18 +654,18 @@ class ServerProtocol(HUDPProtocol):
         
         self.stats["rx_total"] += 1
         
-        # Get or create client state
+        # get or create the client state
         if addr not in self.clients:
             self.clients[addr] = ClientState()
         client_state = self.clients[addr]
         
-        # Handle ACK packets
+        # handle the acknowledgement packet
         if packet.header.is_ack():
             # Server receiving ACK (for server -> client reliable data)
-            # Not implemented in this demo, but would be similar to client
+            # not implemented in this demo, but would be similar to client
             return
             
-        # Handle data packets
+        # handle the data packet
         if packet.header.channel == Channel.RELIABLE:
             self.stats["rx_reliable"] += 1
             self._handle_reliable_data(packet, addr, client_state, now_ms)
@@ -724,7 +674,7 @@ class ServerProtocol(HUDPProtocol):
             self._handle_unreliable_data(packet, addr, now_ms)
             
     def _handle_reliable_data(self, packet: Packet, addr: Tuple[str, int], client_state , now_ms: int):
-        """Handle reliable data packet."""
+        # handler method that is called when a reliable data packet is received
         seq = packet.header.seq
         
         self.log_event({
@@ -735,7 +685,7 @@ class ServerProtocol(HUDPProtocol):
             "arrival_ms": now_ms
         })
         
-        # Send ACK
+        # send the acknowledgement packet to the client
         ack_packet = make_ack_packet(seq, now_ms)
         self.send_raw(ack_packet, addr)
         
@@ -744,33 +694,33 @@ class ServerProtocol(HUDPProtocol):
             "ack_seq": seq
         })
         
-        # Check if within receive window
+        # check if the sequence number is within the receive window
         if not seq_in_window(seq, client_state.expected_seq, self.config["recv_window_size"]):
-            # Outside window, ignore (already delivered or too far ahead)
+            # outside window, ignore (already delivered or too far ahead)
             return
             
-        # Check if already received
+        # check if the packet has already been received
         if seq in client_state.delivered_seqs:
-            # Duplicate, ignore
+            # duplicate, ignore
             return
             
-        # Add to receive buffer
+        # add the packet to the receive buffer
         client_state.recv_buffer[seq] = packet.payload
         
-        # Try to deliver in-order packets
+        # try to deliver the in-order packets
         self._deliver_in_order(client_state, addr)
         
-    def _deliver_in_order(self, client_state, addr: tuple, skipped: bool = False):
-        """Deliver in-order packets from receive buffer."""
+    def _deliver_in_order(self, client_state, addr: Tuple[str, int], skipped: bool = False):
+        # helper method called by the _handle_reliable_data method that delivers the in-order packets from the receive buffer
         while client_state.expected_seq in client_state.recv_buffer:
-            seq = client_state.expected_seq
-            payload = client_state.recv_buffer[seq]
+            seq: int = client_state.expected_seq
+            payload: bytes = client_state.recv_buffer[seq]
             
-            # Deliver to application
+            # deliver the packet to the application
             self.recv_cb({
                 "channel": "RELIABLE",
                 "seq": seq,
-                "ts_ms": 0,  # Original timestamp not available in buffer
+                "ts_ms": 0,  
                 "rtt_ms": None,
                 "payload": payload,
                 "skipped": skipped
@@ -784,26 +734,26 @@ class ServerProtocol(HUDPProtocol):
                 "skipped": skipped
             })
             
-            # Mark as delivered
+            # mark the packet as delivered
             client_state.delivered_seqs.add(seq)
             del client_state.recv_buffer[seq]
             
-            # Remove from gap tracking
+            # remove the packet from the gap tracking
             if seq in client_state.gap_first_seen:
                 del client_state.gap_first_seen[seq]
                 
-            # Advance expected_seq
+            # advance the expected sequence number
             client_state.expected_seq = (client_state.expected_seq + 1) % 65536
-            skipped = False  # Only first delivery after skip is marked
+            skipped = False  # only the first delivery after skip is marked
             
-        # Check if we now have a gap
+        # check if we now have a gap
         if client_state.expected_seq not in client_state.recv_buffer:
             if client_state.expected_seq not in client_state.gap_first_seen:
-                # New gap detected
+                # new gap detected
                 client_state.gap_first_seen[client_state.expected_seq] = get_time_ms()
                 
-    def _handle_unreliable_data(self, packet: Packet, addr: tuple, now_ms: int):
-        """Handle unreliable data packet."""
+    def _handle_unreliable_data(self, packet: Packet, addr: Tuple[str, int], now_ms: int):
+        # handler method that is called when an unreliable data packet is received
         self.log_event({
             "event": "rx_data",
             "seq": packet.header.seq,
@@ -827,7 +777,7 @@ class ServerProtocol(HUDPProtocol):
             self.stats["unrel_jitter"] = j + (d - j) / 16.0
             self.stats["unrel_last_transit"] = transit
         
-        # Deliver immediately
+        # deliver the packet to the application immediately
         self.recv_cb({
             "channel": "UNRELIABLE",
             "seq": packet.header.seq,
@@ -846,7 +796,7 @@ class ServerProtocol(HUDPProtocol):
         })
         
     async def close(self):
-        """Close the protocol."""
+        # close the protocol
         self.closed = True
         
         if self.gap_check_task:
@@ -859,7 +809,7 @@ class ServerProtocol(HUDPProtocol):
 
 @dataclass
 class ClientState:
-    """Per-client state on the server."""
+    # class for the per-client state on the server
     expected_seq: int = 0
     recv_buffer: Dict[int, bytes] = field(default_factory=dict)
     delivered_seqs: set = field(default_factory=set)
