@@ -32,6 +32,11 @@ async def main(bind_ip: str, bind_port: int, loss_prob: float = 0.0):
         "bytes_rel": 0,       
         "bytes_unrel": 0,     
         "unrel_lat_samples": [], 
+        # stats to track reordering
+        "last_seq_rel": None,    
+        "last_seq_unrel": None,      
+        "reordered_rel": 0,         
+        "reordered_unrel": 0, 
     }
     
     def on_packet(pkt):
@@ -41,17 +46,30 @@ async def main(bind_ip: str, bind_port: int, loss_prob: float = 0.0):
         
         # Compute approximate one-way latency for unreliable using ts_ms header
         now_ms = int(time.time() * 1000)     
+        seq = pkt["seq"]
+
         if pkt["channel"] == "RELIABLE":
+            last = stats["last_seq_rel"]
+            if last is not None and seq < last:
+                stats["reordered_rel"] += 1
+                print(f"REORDER REL: last={last} now={seq}")  
+            stats["last_seq_rel"] = seq                    
+
             stats["reliable"] += 1
-            stats["bytes_rel"] += payload_len    
+            stats["bytes_rel"] += payload_len
         else:
+            last = stats["last_seq_unrel"]
+            if last is not None and seq < last:
+                stats["reordered_unrel"] += 1
+                print(f"REORDER UNREL: last={last} now={seq}")
+            stats["last_seq_unrel"] = seq                       
+
             stats["unreliable"] += 1
-            stats["bytes_unrel"] += payload_len  
+            stats["bytes_unrel"] += payload_len
             ts_ms = pkt.get("ts_ms", 0)
-            if ts_ms:                           
+            if ts_ms:
                 transit = now_ms - ts_ms
                 stats["unrel_lat_samples"].append(transit)
-                # keep list bounded              
                 if len(stats["unrel_lat_samples"]) > 100:
                     stats["unrel_lat_samples"].pop(0)
         
@@ -97,6 +115,8 @@ async def main(bind_ip: str, bind_port: int, loss_prob: float = 0.0):
         print(f"    Skipped:    {stats['skipped']:6d} gaps")
         print(f"  Bytes (REL):  {stats['bytes_rel']:6d}")      
         print(f"  Bytes (UNREL):{stats['bytes_unrel']:6d}") 
+        print(f"  Reordered REL:   {stats['reordered_rel']:6d}") 
+        print(f"  Reordered UNREL: {stats['reordered_unrel']:6d}")
 
         # Unreliable latency & jitter
         if stats["unrel_lat_samples"]:
