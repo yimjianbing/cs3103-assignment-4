@@ -73,11 +73,15 @@ async def main(bind_ip: str, bind_port: int):
         config=None
     )
     
+    await server.start()
     print(f"Server listening on {bind_ip}:{bind_port}")
     
     # run server until SIGINT or SIGTERM is received, where the signal handlers is found in the GameNetAPIServer class
     try:
-        await server.run_until_shutdown()
+        # stay alive until interrupted
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
         print("\nShutting down...")
     finally:
         await server.close()

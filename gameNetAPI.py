@@ -545,27 +545,6 @@ class GameNetAPIServer:
     async def start(self):
         # start the server
         await self._ensure_initialized()
-    
-    async def run_until_shutdown(self):
-        await self.start()
-        
-        loop = asyncio.get_running_loop()
-        shutdown_event = asyncio.Event()
-        
-        def signal_handler():
-            shutdown_event.set()
-        
-        # register new handlers for both SIGINT (Ctrl+C) and SIGTERM (kill)
-        loop.add_signal_handler(signal.SIGINT, signal_handler)
-        loop.add_signal_handler(signal.SIGTERM, signal_handler)
-        
-        try:
-            # wait until a signal is received
-            await shutdown_event.wait()
-        finally:
-            # clean up signal handlers
-            loop.remove_signal_handler(signal.SIGINT)
-            loop.remove_signal_handler(signal.SIGTERM)
         
     async def close(self) -> None:
         # close the transport
